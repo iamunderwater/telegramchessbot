@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Quick Play</title>
+
+<style>
+body {
+  background:#0d0d0d;
+  color:white;
+  font-family:sans-serif;
+  height:100vh;
+  margin:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+</style>
+</head>
+
+<body>
+  <h2>Looking for available players...</h2>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  socket.on("connect", () => {
+    socket.emit("enterQuickplay");
+  });
+
+  socket.on("looking", d => {
+    document.querySelector("h2").innerText = d.text || "Looking for players...";
+  });
+
+  socket.on("matched", d => {
+  if (d.roomId && d.role) {
+    localStorage.setItem("quickplayRole", d.role);
+    window.location = "/room/" + d.roomId;
+  }
+});
+</script>
+</body>
+</html>
