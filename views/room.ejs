@@ -1,341 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chess Game</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Chess Game</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <style>
-    /* ---------------- GLOBAL / BODY ---------------- */
+<style>
+body { background:#181818; color:#fff; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; overflow:hidden; }
+.hidden { display:none !important; }
 
-    body {
-      background: #0d0d0d;
-      color: #fff;
-      font-family: sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      flex-direction: column;
-      gap: 10px;
-    }
+/* BOARD */
+.chessboard { width: 340px; height: 340px; position: relative; box-shadow: 0 0 15px #000; margin-top: 10px; }
+.square { width: 42.5px; height: 42.5px; position: absolute; display: flex; align-items: center; justify-content: center; }
+.light { background:#ebecd0; }
+.dark { background:#779556; }
+.piece { width:42.5px; height:42.5px; position:absolute; top:0; left:0; pointer-events:none; z-index:10; }
+.piece-img { width:40px; height:40px; }
+.flipped { transform:rotate(180deg); }
+.flipped .square { transform:rotate(180deg); }
 
-    .hidden {
-      display: none;
-    }
+/* HIGHLIGHTS */
+.selected { background: rgba(255, 255, 0, 0.5); }
+.dot::after { content:""; width:12px; height:12px; background:rgba(0,0,0,0.2); border-radius:50%; }
+.capture::after { content:""; width:38px; height:38px; border:4px solid rgba(0,0,0,0.2); border-radius:50%; }
 
-    /* ---------------- CHESSBOARD + PIECES ---------------- */
+/* MODAL */
+#setup-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal-content { background: #2a2a2a; padding: 20px; border-radius: 15px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 0 20px #000; }
+.slider-container { margin: 20px 0; }
+input[type=range] { width: 100%; accent-color: #779556; }
+.btn-row { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+.choice-btn { padding: 12px 24px; border: none; border-radius: 8px; font-weight: bold; font-size:16px; cursor: pointer; }
+.btn-white { background: #ebecd0; color: #000; }
+.btn-black { background: #333; color: #fff; border: 1px solid #555; }
 
-    /* >>> THIS IS THE FINAL, CLEAN, NON-CONFLICTING VERSION <<< */
-
-    .chessboard {
-      width: 640px;
-      height: 640px;
-      position: relative;
-      overflow: visible;
-      box-shadow: 0 0 20px #333;
-      border-radius: 6px;
-      transition: transform .4s;
-      display: block;
-      /* IMPORTANT: NOT GRID */
-    }
-
-    /* MAKE EACH SQUARE ABSOLUTE INSIDE BOARD */
-    .square {
-      width: 80px;
-      height: 80px;
-      position: absolute;
-      /* REQUIRED for smooth animation */
-      display: flex;
-      /* REQUIRED to center piece */
-      align-items: center;
-      justify-content: center;
-    }
-
-    .light {
-      background: #f0d9b5;
-    }
-
-    .dark {
-      background: #b58863;
-    }
-
-    /* Piece container */
-    .piece {
-      position: absolute;
-      left: 0;
-      top: 0;
-
-      width: 80px;
-      /* THE FIX */
-      height: 80px;
-      /* THE FIX */
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      transition: transform 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
-      cursor: grab;
-      z-index: 3;
-
-      /* ADDED FOR HARDWARE ACCELERATION / SMOOTHNESS */
-      will-change: transform;
-      backface-visibility: hidden;
-    }
-
-    .piece.dragging {
-      opacity: 0;
-    }
-
-    /* Piece image */
-    .piece-img {
-      width: 70px;
-      height: 70px;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    /* Flipped board */
-    .flipped {
-      transform: rotate(180deg);
-    }
-
-    .flipped .square {
-      transform: rotate(180deg);
-    }
-
-    /* ---------------- MOVE HIGHLIGHT DOTS ---------------- */
-
-    .square.selected::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: rgba(255, 255, 0, 0.5);
-      /* Lichess-style yellow */
-      z-index: 1;
-      pointer-events: none;
-    }
-
-    /* Keep the dots/circles */
-    .square.dot::after {
-      content: "";
-      width: 18px;
-      height: 18px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 50%;
-      position: absolute;
-      z-index: 2;
-    }
-
-    .square.capture::after {
-      content: "";
-      width: 36px;
-      height: 36px;
-      border: 4px solid rgba(255, 0, 0, 0.65);
-      border-radius: 50%;
-      position: absolute;
-      z-index: 2;
-    }
-
-    /* ---------------- TIMERS ---------------- */
-
-    .timer-box {
-      font-size: 22px;
-      font-weight: bold;
-      background: #111;
-      padding: 6px 18px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px #00ffff70;
-    }
-
-    /* Wrapper = board + timers */
-    .board-wrapper {
-      position: relative;
-      display: inline-block;
-    }
-
-    /* SIDE TIMERS (right side of board) */
-    .side-timer {
-      position: absolute;
-      right: -140px;
-      width: 120px;
-      padding: 10px 0;
-      text-align: center;
-      font-size: 24px;
-      font-weight: bold;
-      background: #111;
-      border-radius: 10px;
-      box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
-    }
-
-    #top-timer {
-      top: 25px;
-    }
-
-    #bottom-timer {
-      bottom: 25px;
-    }
-
-    /* ---------------- SIDE BUTTONS + CONFIRM BOX ---------------- */
-
-    .side-buttons {
-      position: absolute;
-      right: -155px;
-      top: 200px;
-      width: 130px;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-
-    .side-btn {
-      background: #111;
-      color: #fff;
-      padding: 14px 5px;
-      font-size: 20px;
-      border-radius: 10px;
-      text-align: center;
-      cursor: pointer;
-      box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
-      user-select: none;
-      transition: .2s;
-    }
-
-    .side-btn:hover {
-      background: #222;
-      transform: scale(1.05);
-    }
-
-    /* Confirm boxes */
-    .confirm-box {
-      position: absolute;
-      right: -155px;
-      width: 130px;
-      background: #111;
-      padding: 12px;
-      border-radius: 10px;
-      box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
-      text-align: center;
-      font-size: 16px;
-      z-index: 5;
-    }
-
-    .confirm-row {
-      display: flex;
-      justify-content: space-around;
-      margin-top: 8px;
-    }
-
-    .confirm-btn {
-      padding: 6px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 20px;
-      background: #222;
-      color: white;
-    }
-
-    .confirm-btn.yes:hover {
-      background: #0a0;
-    }
-
-    .confirm-btn.no:hover {
-      background: #a00;
-    }
-
-    /* ---------------- GAME OVER POPUP ---------------- */
-
-    #popup {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, .8);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
-    }
-
-    #popup.show {
-      display: flex;
-    }
-
-    #popup-content {
-      background: #222;
-      padding: 30px 50px;
-      border-radius: 15px;
-      text-align: center;
-    }
-  </style>
+/* UI ELEMENTS */
+.timer-bar { display: flex; justify-content: space-between; width: 340px; margin: 5px 0; }
+.timer { background: #333; padding: 5px 12px; border-radius: 5px; font-family: monospace; font-size: 16px; }
+.player-info { display:flex; align-items:center; gap:10px; font-size:14px; color:#ccc; }
+</style>
 </head>
 
 <body>
 
-  <!-- WAITING UI -->
-  <div id="waiting">
-    <h2 id="wait-text"></h2>
-    <p id="room-link"></p>
-  </div>
-
-  <!-- GAME UI -->
-  <div id="game" class="hidden">
-
-    <div class="board-wrapper">
-
-      <!-- TOP TIMER -->
-      <div id="top-timer" class="side-timer">05:00</div>
-
-      <!-- CHESSBOARD -->
-      <div class="chessboard"></div>
-
-      <!-- BOTTOM TIMER -->
-      <div id="bottom-timer" class="side-timer">05:00</div>
-
-      <!-- SIDE BUTTONS -->
-      <div class="side-buttons">
-        <div id="resign-btn" class="side-btn">Resign 😭</div>
-        <div id="draw-btn" class="side-btn">Draw 🤝</div>
-        <div id="draw-message" style="margin-top:10px; color:#ff4444;"></div>
-
-        <!-- MY CONFIRM BOX -->
-        <div id="my-confirm-box" class="confirm-box hidden">
-          <div id="my-confirm-text"></div>
-          <div class="confirm-row">
-            <button id="my-yes" class="confirm-btn yes">✔</button>
-            <button id="my-no" class="confirm-btn no">❌</button>
-          </div>
-        </div>
-
-        <!-- OPPONENT CONFIRM BOX -->
-        <div id="opp-confirm-box" class="confirm-box hidden">
-          <div id="opp-confirm-text"></div>
-          <div class="confirm-row">
-            <button id="opp-yes" class="confirm-btn yes">✔</button>
-            <button id="opp-no" class="confirm-btn no">❌</button>
-          </div>
-        </div>
-
-      </div>
-
+<div id="setup-modal" class="hidden">
+  <div class="modal-content">
+    <h3>⚙️ Setup Game</h3>
+    <div class="slider-container">
+      <label>Time Control: <span id="time-display" style="font-weight:bold; color:#779556;">10</span> min</label><br><br>
+      <input type="range" id="time-slider" min="1" max="30" value="10" 
+             oninput="document.getElementById('time-display').innerText = this.value">
     </div>
-
-    <!-- GAME OVER POPUP -->
-    <div id="popup">
-      <div id="popup-content">
-        <span id="popup-text"></span><br><br>
-        <button id="play-again">Play Again 🔁</button>
-      </div>
+    <p>Choose your side:</p>
+    <div class="btn-row">
+      <button class="choice-btn btn-white" onclick="confirmSettings('w')">White</button>
+      <button class="choice-btn btn-black" onclick="confirmSettings('b')">Black</button>
     </div>
   </div>
+</div>
 
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-  <script>
-    const ROOM_ID = "<%= roomId %>";
-  </script>
-  <script src="/js/chessgame.js"></script>
+<div id="waiting" class="hidden" style="text-align:center;">
+  <h2>Waiting for opponent...</h2>
+  <p style="color:#888;">Forward the message in Telegram to invite a friend!</p>
+</div>
 
+<div id="game" class="hidden">
+  <div class="timer-bar">
+    <div class="player-info">👤 <span id="top-name">Opponent</span></div>
+    <div id="top-timer" class="timer">10:00</div>
+  </div>
+
+  <div class="chessboard"></div>
+
+  <div class="timer-bar">
+    <div class="player-info">👤 <span id="bot-name">You</span></div>
+    <div id="bottom-timer" class="timer">10:00</div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>const ROOM_ID = "<%= roomId %>";</script>
+<script src="/js/chessgame.js"></script>
 </body>
-
 </html>
