@@ -224,7 +224,7 @@ bot.command('start', (ctx) => {
 // 2. CREATE GAME BUTTON CLICKED
 bot.action("create_game", (ctx) => {
     const roomId = makeRoomId();
-    const shareUrl = `https://t.me/${ctx.botInfo.username}/chess?startapp=${roomId}`;
+    const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
 
     ctx.replyWithPhoto(
         "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg",
@@ -246,7 +246,7 @@ bot.on('inline_query', (ctx) => {
     if (!roomId) return;
 
     // The link the friend will click
-    const shareUrl = `https://t.me/${ctx.botInfo.username}/chess?startapp=${roomId}`;
+    const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
 
     // Create the "Card" result
     const result = {
