@@ -16,7 +16,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"; // <--- Paste your token inside quotes!
+const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; // <--- Paste your token inside quotes!
 const GAME_URL = "https://chessit.onrender.com"; 
 const GAME_SHORT_NAME = "Optimal_Chess"; 
 
