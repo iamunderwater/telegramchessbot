@@ -1,7 +1,6 @@
 const express = require("express");
 const socketio = require("socket.io");
 const http = require("http");
-const https = require("https"); // <--- Added https module
 const { Chess } = require("chess.js");
 const path = require("path");
 const crypto = require("crypto");
@@ -200,12 +199,7 @@ io.on("connection", (socket) => {
 // ==========================================
 // TELEGRAM BOT LOGIC (FINAL & FIXED)
 // ==========================================
-// Create an agent that forces IPv4 to avoid timeout issues on some networks
-const agent = new https.Agent({ family: 4 });
-
-const bot = new Telegraf(BOT_TOKEN, { 
-  telegram: { agent } 
-});
+const bot = new Telegraf(BOT_TOKEN);
 
 // 1. START COMMAND
 bot.command('start', (ctx) => {
