@@ -212,8 +212,6 @@ bot.on('inline_query', (ctx) => {
     }]);
 });
 
-bot.launch();
-
 const WEBHOOK_PATH = '/telegram-webhook';
 
 // 2. Tell Express to handle incoming updates from Telegram
