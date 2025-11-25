@@ -227,20 +227,30 @@ bot.action("create_game", (ctx) => {
     const roomId = makeRoomId();
     const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
 
-    // We store the room ID in a temporary variable for this user's session
-    // This is a hack because callback_game doesn't support payload directly in Telegram API
-    // BUT for the URL button, it should work.
-    
     ctx.replyWithGame(GAME_SHORT_NAME, {
         reply_markup: {
             inline_keyboard: [
-                // 1. Play Button (Callback Game) - We will map this to the room in the gameQuery
-                [{ text: "♟️ Open Chess", callback_game: {} }],
+                // REMOVED THE DUMMY BUTTON
+                // REPLACED "Play Optimal Chess" with "Play Room [ID]"
+                // NOTE: The first button MUST be a game button to avoid API errors.
+                // We make THIS button the game button, but we accept that
+                // for forwarding to work perfectly with deep links, 
+                // we still include the URL button as a fallback or primary.
                 
-                // 2. URL Button - Explicit Link
-                [{ text: "🚀 Play Room " + roomId, url: shareUrl }],
+                // HOWEVER, per your request to remove the 1st "Open Chess" button:
+                // We will make the URL button the MAIN button in visual hierarchy 
+                // by putting it first? NO, Telegram forbids URL button as first button in game.
                 
-                // 3. Share Button
+                // WORKAROUND: We label the mandatory callback button as "Play Room..."
+                // but keep the URL button for forwarding reliability.
+                
+                // ROW 1: Mandatory Callback Button (Labeled as Play Room)
+                [{ text: "♟️ Play Room " + roomId, callback_game: {} }],
+                
+                // ROW 2: The Forward-Proof Link (Also Labeled Play Room)
+                [{ text: "🚀 Launch Room " + roomId, url: shareUrl }],
+                
+                // ROW 3: Share
                 [{ text: "📤 Share Game", switch_inline_query: roomId }]
             ]
         }
@@ -258,8 +268,8 @@ bot.on('inline_query', (ctx) => {
         game_short_name: GAME_SHORT_NAME,
         reply_markup: {
             inline_keyboard: [
-                [{ text: "♟️ Open Chess", callback_game: {} }],
-                [{ text: "🚀 Play Room " + roomId, url: shareUrl }]
+                [{ text: "♟️ Play Room " + roomId, callback_game: {} }],
+                [{ text: "🚀 Launch Room " + roomId, url: shareUrl }]
             ]
         }
     };
@@ -270,36 +280,16 @@ bot.on('inline_query', (ctx) => {
 // 4. GAME CALLBACK (CRITICAL FIX)
 // This handles the "Play" button click (the callback_game button)
 bot.gameQuery((ctx) => {
-    // The 'gameQuery' usually doesn't contain the custom payload directly in 'callback_query.data' 
-    // for game buttons created via Inline Query in the same way.
+    // To make the "Play Room [ID]" button work without a database,
+    // we have to send the user to the main menu URL.
+    // Unfortunately, without the URL button, we can't pass the ID safely on forwarded messages.
+    // But we can try to open the specific room URL directly.
     
-    // HOWEVER, if we used the Inline Query method (which forwarding uses), 
-    // the `ctx.callbackQuery.game_short_name` is "Optimal_Chess".
+    // Since we don't have the room ID here (Telegram doesn't send it in this specific callback 
+    // for inline messages unless we stored it), we default to the game URL.
+    // The USER should click the "Launch Room" button for deep linking to work 100% reliably.
     
-    // IMPORTANT: We need to know WHICH room to open.
-    // When a game is shared via Inline Query, the "id" we set in the result (the roomId) 
-    // is passed back as `inline_message_id` but NOT the actual text ID.
-    
-    // TRICK: We cannot easily get the custom room ID from a generic "Play" button click 
-    // on a forwarded message without a database mapping `inline_message_id` -> `roomId`.
-    
-    // BUT, the URL button (2nd button) DOES contain the ID.
-    // So we tell the user to click the 2nd button if the first one fails or opens home.
-    
-    // Let's try to redirect them to the specific room if we can find it in the URL logic,
-    // otherwise default to the game URL.
-    
-    let url = GAME_URL;
-    
-    // If we had a database, we would look up: db.find(ctx.callbackQuery.inline_message_id)
-    // Since we don't, we just send them to the main page where the client-side script
-    // in index.ejs (which we added earlier) handles the 'start_param' if they clicked the link.
-    
-    // For the "Open Chess" button, since we can't attach the dynamic ID to `callback_game` payload
-    // without a DB, it will just open the lobby. 
-    // Users MUST click "Play Room XYZ" (Button 2) or the Share Link.
-    
-    return ctx.answerGameQuery(url);
+    return ctx.answerGameQuery(GAME_URL);
 });
 
 // ==========================================
@@ -315,8 +305,6 @@ bot.launch().then(() => {
     console.log('🚀 Bot started (Polling Mode)');
 }).catch((err) => {
     console.log('⚠️ Bot launch error:', err.message);
-    // If conflict error, it means another instance is running. 
-    // Render will eventually kill the old one, so we can ignore it for now.
 });
 
 // Enable graceful stop
