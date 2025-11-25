@@ -1,6 +1,7 @@
 const express = require("express");
 const socketio = require("socket.io");
 const http = require("http");
+const https = require("https");
 const { Chess } = require("chess.js");
 const path = require("path");
 const crypto = require("crypto");
@@ -16,9 +17,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; // <--- Paste your token inside quotes!
+const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"; // <--- PASTE TOKEN HERE
 const GAME_URL = "https://chessit.onrender.com"; 
 const GAME_SHORT_NAME = "Optimal_Chess"; 
+const PORT = process.env.PORT || 3000; 
 
 // ==========================================
 // GAME STATE
@@ -197,11 +199,11 @@ io.on("connection", (socket) => {
 });
 
 // ==========================================
-// TELEGRAM BOT LOGIC (FINAL & FIXED)
+// TELEGRAM BOT LOGIC (WEBHOOK SUPPORT)
 // ==========================================
-const bot = new Telegraf(BOT_TOKEN);
+const agent = new https.Agent({ family: 4 });
+const bot = new Telegraf(BOT_TOKEN, { telegram: { agent } });
 
-// 1. START COMMAND
 bot.command('start', (ctx) => {
     ctx.replyWithPhoto(
         "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", 
@@ -217,29 +219,21 @@ bot.command('start', (ctx) => {
     );
 });
 
-// 2. CREATE GAME (Sends the Forwardable Card)
 bot.action("create_game", (ctx) => {
     const roomId = makeRoomId();
-    // Use your Mini App Short Name here ('OptimalChess')
     const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
 
     ctx.replyWithGame(GAME_SHORT_NAME, {
         reply_markup: {
             inline_keyboard: [
-                // ROW 1: Dummy Play Button (Required by Telegram)
                 [{ text: "♟️ Open Chess", callback_game: {} }],
-                
-                // ROW 2: The REAL "Join Room" Button (Persists on Forward!)
                 [{ text: "🚀 Play Room " + roomId, url: shareUrl }],
-                
-                // ROW 3: Easy Share Button
                 [{ text: "📤 Share Game", switch_inline_query: roomId }]
             ]
         }
     });
 });
 
-// 3. INLINE QUERY (Sharing via @BotName)
 bot.on('inline_query', (ctx) => {
     const roomId = ctx.inlineQuery.query || makeRoomId(); 
     const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
@@ -259,11 +253,40 @@ bot.on('inline_query', (ctx) => {
     return ctx.answerInlineQuery([result], { cache_time: 0 });
 });
 
-// 4. GAME CALLBACK (Handles the dummy button)
 bot.gameQuery((ctx) => {
     return ctx.answerGameQuery(GAME_URL);
 });
 
-bot.launch();
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+// ==========================================
+// SERVER LAUNCH (WEBHOOK vs POLLING)
+// ==========================================
+
+// 1. Generate a random path for the webhook
+const secretPath = `/telegraf/${crypto.randomBytes(8).toString('hex')}`;
+
+// 2. Set up the webhook listener on Express
+app.use(bot.webhookCallback(secretPath));
+
+// 3. Start Server & Set Webhook
+server.listen(PORT, async () => {
+    console.log(`✅ Server running on port ${PORT}`);
+
+    // Check if running on Render (Render automatically sets the 'RENDER' env var)
+    if (process.env.RENDER || GAME_URL.includes('render')) {
+        console.log("🚀 Running on Render -> Setting Webhook...");
+        try {
+            // Delete any old webhook first to be safe
+            await bot.telegram.deleteWebhook();
+            
+            // Set the new one
+            await bot.telegram.setWebhook(`${GAME_URL}${secretPath}`);
+            console.log(`✅ Webhook successfully set to: ${GAME_URL}${secretPath}`);
+        } catch (err) {
+            console.error("❌ Failed to set webhook:", err);
+        }
+    } else {
+        console.log("💻 Running locally -> Starting Polling...");
+        // Only start polling if NOT on Render
+        bot.launch();
+    }
+});
