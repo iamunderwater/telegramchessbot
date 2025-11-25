@@ -1,7 +1,7 @@
 const express = require("express");
 const socketio = require("socket.io");
 const http = require("http");
-const https = require("https");
+const https = require("https"); // Required for fixing Telegram timeout
 const { Chess } = require("chess.js");
 const path = require("path");
 const crypto = require("crypto");
@@ -17,10 +17,9 @@ app.use(express.static(path.join(__dirname, "public")));
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; // <--- PASTE TOKEN HERE
-const GAME_URL = "https://chessit.onrender.com"; 
-const GAME_SHORT_NAME = "Optimal_Chess"; 
-const PORT = process.env.PORT || 3000; 
+const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; 
+const GAME_URL = "https://telegramchessbot.onrender.com"; 
+const GAME_SHORT_NAME = "Optimal_Chess"; // Your Game Name from BotFather
 
 // ==========================================
 // GAME STATE
@@ -199,11 +198,14 @@ io.on("connection", (socket) => {
 });
 
 // ==========================================
-// TELEGRAM BOT LOGIC (WEBHOOK SUPPORT)
+// TELEGRAM BOT LOGIC
 // ==========================================
+
+// FIX 1: Use custom agent to prevent ETIMEDOUT on Render
 const agent = new https.Agent({ family: 4 });
 const bot = new Telegraf(BOT_TOKEN, { telegram: { agent } });
 
+// 1. START COMMAND
 bot.command('start', (ctx) => {
     ctx.replyWithPhoto(
         "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", 
@@ -219,21 +221,30 @@ bot.command('start', (ctx) => {
     );
 });
 
+// 2. ACTION (Sends the Forwardable Game Card)
 bot.action("create_game", (ctx) => {
     const roomId = makeRoomId();
+    // Use your Mini App Short Name here ('OptimalChess')
     const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
 
+    // FIX 2: Use replyWithGame + Dummy Button
     ctx.replyWithGame(GAME_SHORT_NAME, {
         reply_markup: {
             inline_keyboard: [
+                // ROW 1: Dummy Button (Required by Telegram)
                 [{ text: "♟️ Open Chess", callback_game: {} }],
+                
+                // ROW 2: The REAL Button (Persists on Forward!)
                 [{ text: "🚀 Play Room " + roomId, url: shareUrl }],
+                
+                // ROW 3: Easy Share Button
                 [{ text: "📤 Share Game", switch_inline_query: roomId }]
             ]
         }
     });
 });
 
+// 3. INLINE QUERY (Sharing via @BotName)
 bot.on('inline_query', (ctx) => {
     const roomId = ctx.inlineQuery.query || makeRoomId(); 
     const shareUrl = `https://t.me/${ctx.botInfo.username}/OptimalChess?startapp=${roomId}`;
@@ -253,44 +264,28 @@ bot.on('inline_query', (ctx) => {
     return ctx.answerInlineQuery([result], { cache_time: 0 });
 });
 
+// 4. GAME CALLBACK (Handles the dummy button)
 bot.gameQuery((ctx) => {
     return ctx.answerGameQuery(GAME_URL);
 });
 
 // ==========================================
-// SERVER LAUNCH (WEBHOOK vs POLLING)
+// SERVER LAUNCH (SIMPLE POLLING)
 // ==========================================
 
-// 1. Generate a random path for the webhook
-const secretPath = `/telegraf/${process.env.SECRET_PATH || "my-secret-path"}`;
+// Start the Express Server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
-// 2. Set up the webhook listener on Express
-app.use(bot.webhookCallback(secretPath));
-
-// 3. Start Server & Set Webhook
-server.listen(PORT, async () => {
-    console.log(`✅ Server running on port ${PORT}`);
-
-    // Check if running on Render
-    if (process.env.RENDER || GAME_URL.includes('render')) {
-        console.log("🚀 Running on Render -> Setting Webhook...");
-        
-        const webhookUrl = `${GAME_URL}${secretPath}`;
-        
-        try {
-            // Explicitly set the webhook to the known URL
-            const success = await bot.telegram.setWebhook(webhookUrl);
-            
-            if (success) {
-                console.log(`✅ Webhook successfully set to: ${webhookUrl}`);
-            } else {
-                console.error("❌ Telegram API returned false for setWebhook");
-            }
-        } catch (err) {
-            console.error("❌ Failed to set webhook:", err);
-        }
-    } else {
-        console.log("💻 Running locally -> Starting Polling...");
-        bot.launch();
-    }
+// Start the Bot (with error handling for conflicts)
+bot.launch().then(() => {
+    console.log('🚀 Bot started (Polling Mode)');
+}).catch((err) => {
+    console.log('⚠️ Bot launch error:', err.message);
+    // If conflict error, it means another instance is running. 
+    // Render will eventually kill the old one, so we can ignore it for now.
 });
+
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
