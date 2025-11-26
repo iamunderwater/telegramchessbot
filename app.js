@@ -18,20 +18,13 @@ app.use(express.static(path.join(__dirname, "public")));
 // ==========================================
 const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; 
 const GAME_URL = "https://telegramchessbot.onrender.com"; 
-const GAME_SHORT_NAME = "Optimal_Chess"; // Must match BotFather exactly
+const GAME_SHORT_NAME = "Optimal_Chess"; 
 
 // ==========================================
-// SESSION MANAGEMENT (The Fix)
+// SESSION MANAGEMENT
 // ==========================================
 const rooms = Object.create(null);
-
-// 1. Remembers which room a user created/joined last
-// Key: UserId, Value: RoomId
 const userSessions = new Map(); 
-
-// 2. Links a Shared Message to a specific Room
-// Key: InlineMessageId, Value: RoomId
-const inlineGameMappings = new Map();
 
 const makeRoomId = () => crypto.randomBytes(4).toString("hex").slice(0, 6).toUpperCase();
 
@@ -162,7 +155,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 4. MOVES
+  // 4. MOVE HANDLING
   socket.on("move", (data) => {
     try {
       const roomId = socket.data.currentRoom || data.roomId;
@@ -213,11 +206,28 @@ io.on("connection", (socket) => {
 // ==========================================
 const bot = new Telegraf(BOT_TOKEN);
 
-bot.command('start', (ctx) => {
+// 1. START COMMAND (Handles both /start and /start join_ROOMID)
+bot.start((ctx) => {
+    // Check if the user clicked a Deep Link (e.g., t.me/Bot?start=join_AB12CD)
+    const payload = ctx.startPayload; 
+    
+    if (payload && payload.startsWith("join_")) {
+        const roomId = payload.split("_")[1];
+        
+        // Save the Room ID for this user
+        userSessions.set(ctx.from.id, roomId);
+        
+        // Send the ACTUAL Game Message (This is fresh, so the button works!)
+        return ctx.replyWithGame(GAME_SHORT_NAME, Markup.inlineKeyboard([
+             [Markup.button.game("♟️ Launch Game")]
+        ]));
+    }
+
+    // Standard Start Message
     ctx.replyWithPhoto(
         "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", 
         {
-            caption: "<b>Welcome to Chess Master!</b>\n\nClick below to start a game with friends.",
+            caption: "<b>Welcome to Chess Master!</b>\n\nClick below to create a game.",
             parse_mode: "HTML",
             ...Markup.inlineKeyboard([
                 [Markup.button.callback("🎮 Create New Game", "create_game")]
@@ -226,66 +236,68 @@ bot.command('start', (ctx) => {
     );
 });
 
-bot.action("create_game", (ctx) => {
-    // 1. Standard Game Button
-    // 2. Share Button (Switches to Inline Mode)
-    return ctx.replyWithGame(GAME_SHORT_NAME, Markup.inlineKeyboard([
-        [Markup.button.game("♟️ Play Chess")],
-        [Markup.button.switchToChat("📤 Share with Friends", "play")] 
-    ]));
+// 2. CREATE GAME (Sends an INVITE CARD, not the game directly)
+bot.action("create_game", async (ctx) => {
+    const roomId = makeRoomId();
+    if(!rooms[roomId]) createRoom(roomId);
+
+    // This URL is safe to forward!
+    const botUsername = ctx.botInfo.username;
+    const deepLink = `https://t.me/${botUsername}?start=join_${roomId}`;
+
+    await ctx.replyWithPhoto("https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", {
+        caption: `♟️ <b>Chess Game Created!</b>\n\nRoom ID: <code>${roomId}</code>\n\nForward this message to a friend so they can join!`,
+        parse_mode: "HTML",
+        reply_markup: {
+            inline_keyboard: [
+                // THIS BUTTON IS A URL BUTTON. IT NEVER BREAKS ON FORWARD.
+                [{ text: "♟️ Play Chess", url: deepLink }],
+                [{ text: "📤 Share", switch_inline_query: "play" }]
+            ]
+        }
+    });
 });
 
-// --- THE CORE FIX IS HERE ---
-
+// 3. LAUNCH GAME (When user clicks "Launch Game")
 bot.gameQuery((ctx) => {
-    let roomId;
-    const { inline_message_id, from } = ctx.callbackQuery;
-
-    // SCENARIO A: Clicking "Play" on a shared inline message
-    // We check if this message is linked to a specific room
-    if (inline_message_id && inlineGameMappings.has(inline_message_id)) {
-        roomId = inlineGameMappings.get(inline_message_id);
-    } 
-    // SCENARIO B: Clicking "Play" on the main bot message (New Game)
-    else {
+    // Get the Room ID we saved in the "start" handler or "create_game"
+    let roomId = userSessions.get(ctx.from.id);
+    
+    if (!roomId) {
+        // Fallback: Create new room if tracking failed
         roomId = makeRoomId();
-        // Save this as User 1's active room
-        userSessions.set(from.id, roomId);
+        userSessions.set(ctx.from.id, roomId);
     }
 
     const gameUrl = `${GAME_URL}/room/${roomId}`;
     return ctx.answerGameQuery(gameUrl);
 });
 
-// When user clicks "Share with Friends", this triggers
+// 4. INLINE QUERY (Share Button)
 bot.on('inline_query', (ctx) => {
     const userId = ctx.from.id;
-    // Find the room this user just created/joined
     let roomId = userSessions.get(userId);
-
-    // Fallback if they haven't joined a room yet
     if (!roomId) roomId = "new_game";
 
+    const deepLink = `https://t.me/${ctx.botInfo.username}?start=join_${roomId}`;
+
     const results = [{
-        type: 'game',
-        id: roomId, // We use the Room ID as the Result ID
-        game_short_name: GAME_SHORT_NAME,
-        reply_markup: Markup.inlineKeyboard([
-            [Markup.button.game("♟️ Play Chess")]
-        ])
+        type: 'article',
+        id: roomId,
+        title: 'Play Chess',
+        description: 'Click to join my Chess Game',
+        thumb_url: "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg",
+        input_message_content: {
+            message_text: `♟️ <b>Join my Chess Game!</b>\n\nClick the button below to play.`,
+            parse_mode: "HTML"
+        },
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "♟️ Play Chess", url: deepLink }]
+            ]
+        }
     }];
     return ctx.answerInlineQuery(results);
-});
-
-// When the user actually sends the game to a chat
-bot.on('chosen_inline_result', (ctx) => {
-    const { inline_message_id, result_id } = ctx.update.chosen_inline_result;
-    
-    // result_id is the roomId we packed in the step above
-    if (result_id && result_id !== "new_game") {
-        // Now we link this specific sent message to that Room ID
-        inlineGameMappings.set(inline_message_id, result_id);
-    }
 });
 
 bot.launch();
