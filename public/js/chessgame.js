@@ -1,7 +1,13 @@
 const socket = io();
 const chess = new Chess();
+
+// Telegram WebApp
 const tg = window.Telegram.WebApp;
 tg.expand();
+
+// Read roomId from Telegram deep-link (if forwarded “Play” was clicked)
+const START_PARAM = tg.initDataUnsafe?.start_param || null;
+console.log("Start param:", START_PARAM);
 
 let boardEl = null;
 let role = null;

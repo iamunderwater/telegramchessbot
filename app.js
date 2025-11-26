@@ -223,18 +223,25 @@ bot.command('start', (ctx) => {
 
 bot.action("create_game", async (ctx) => {
     await ctx.answerCbQuery();
-
+    
     const roomId = makeRoomId();
     const gameLink = `${GAME_URL}/room/${roomId}`;
 
+    // Send game message
     await ctx.replyWithGame("Optimal_Chess", {
-    reply_markup: {
-        inline_keyboard: [
-            [{ text: "▶️ Play", callback_game: {} }],
-            [Markup.button.webApp("🚀 Enter The Game", gameLink)]
-        ]
-    }
-});
+        reply_markup: {
+            inline_keyboard: [
+                // Game Button (NO URL HERE)
+                [{ text: "▶️ Play", callback_game: {} }],
+
+                // WebApp Button shows the room explicitly
+                [Markup.button.webApp("🚀 Enter The Game", gameLink)]
+            ]
+        }
+    });
+
+    // Send deep-link so forwarded messages open the same room
+    await ctx.reply(`Invite a friend: https://t.me/${ctx.botInfo.username}?start=${roomId}`);
 });
 
 
