@@ -226,7 +226,7 @@ bot.on('inline_query', (ctx) => {
         {
             type: 'game',
             id: '0',
-            game_short_name: 'chessgame', // Must match BotFather short name
+            game_short_name: 'Optimal_Chess', // Must match BotFather short name
             // This ensures the game is sharable via inline mode
         }
     ];
@@ -239,7 +239,7 @@ bot.action("create_game", (ctx) => {
     // when the user actually clicks "Play".
     
     // "chessgame" must match the Short Name you made in BotFather
-    return ctx.replyWithGame("chessgame", {
+    return ctx.replyWithGame("Optimal_Chess", {
         ...Markup.inlineKeyboard([
             // You can add a "Share" button that triggers an inline query to share the game
             [Markup.button.switchToChat("TB 📤 Share Game with Friends", "play")] 
