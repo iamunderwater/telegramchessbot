@@ -239,19 +239,49 @@ bot.action("create_game", (ctx) => {
 
 bot.gameQuery((ctx) => {
     let roomId;
-    const { inline_message_id, from } = ctx.callbackQuery;
+    const { inline_message_id, message, from } = ctx.callbackQuery;
 
-    // SCENARIO A: Clicking "Play" on a shared inline message
-    // We check if this message is linked to a specific room
-    if (inline_message_id && inlineGameMappings.has(inline_message_id)) {
-        roomId = inlineGameMappings.get(inline_message_id);
+    // --- CASE 1: SHARED VIA INLINE BUTTON (The Best Way) ---
+    if (inline_message_id) {
+        if (inlineGameMappings.has(inline_message_id)) {
+            roomId = inlineGameMappings.get(inline_message_id);
+        } else {
+            roomId = makeRoomId();
+            inlineGameMappings.set(inline_message_id, roomId);
+        }
     } 
-    // SCENARIO B: Clicking "Play" on the main bot message (New Game)
-    else {
-        roomId = makeRoomId();
-        // Save this as User 1's active room
-        userSessions.set(from.id, roomId);
+    // --- CASE 2: FORWARDED MESSAGE (The "GameFactory" Trick) ---
+    else if (message) {
+        // 1. Check if this message is a "Forward" from someone else
+        // (Telegram changed API recently, so we check both old and new fields)
+        const forwardedFrom = message.forward_from || 
+                             (message.forward_origin && message.forward_origin.sender_user);
+
+        // 2. If it is forwarded, try to find the Original Sender's game
+        if (forwardedFrom) {
+            const hostsRoom = userSessions.get(forwardedFrom.id);
+            if (hostsRoom) {
+                roomId = hostsRoom;
+            }
+        }
+        
+        // 3. If we still don't have a room (e.g. not forwarded, or host has no game)
+        if (!roomId) {
+            // Check if this exact message has a room (Group Chat Logic)
+            const messageKey = `${message.chat.id}_${message.message_id}`;
+            if (messageGameMappings.has(messageKey)) {
+                roomId = messageGameMappings.get(messageKey);
+            } else {
+                // LAST RESORT: Create a new room
+                roomId = makeRoomId();
+                messageGameMappings.set(messageKey, roomId);
+            }
+        }
     }
+
+    // Always update the session for the user who just clicked
+    // So if THEY share the game later, their friends join THIS room.
+    userSessions.set(from.id, roomId);
 
     const gameUrl = `${GAME_URL}/room/${roomId}`;
     return ctx.answerGameQuery(gameUrl);
