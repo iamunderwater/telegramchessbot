@@ -234,15 +234,16 @@ bot.on('inline_query', (ctx) => {
 });
 
 bot.action("create_game", (ctx) => {
-    // 1. We don't generate the Room ID here anymore.
-    // We just send the Game invitation. The Room ID will be generated
-    // when the user actually clicks "Play".
-    
-    // "chessgame" must match the Short Name you made in BotFather
+    // Make sure "Optimal_Chess" matches your BotFather game short name exactly
     return ctx.replyWithGame("Optimal_Chess", {
         ...Markup.inlineKeyboard([
-            // You can add a "Share" button that triggers an inline query to share the game
-            [Markup.button.switchToChat("TB 📤 Share Game with Friends", "play")] 
+            // --- ROW 1: MANDATORY GAME BUTTON ---
+            // This specific button type triggers the gameQuery
+            [Markup.button.game("♟️ Play Chess")], 
+            
+            // --- ROW 2: SHARE BUTTON ---
+            // This button lets users forward the game to others
+            [Markup.button.switchToChat("📤 Share with Friends", "play")]
         ])
     });
 });
