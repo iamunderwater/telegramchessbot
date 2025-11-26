@@ -228,13 +228,13 @@ bot.action("create_game", async (ctx) => {
     const gameLink = `${GAME_URL}/room/${roomId}`;
 
     await ctx.replyWithGame("Optimal_Chess", {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "▶️ Play", callback_game: {} }],
-                [{ text: "🚀 Enter The Game", url: gameLink }]
-            ]
-        }
-    });
+    reply_markup: {
+        inline_keyboard: [
+            [{ text: "▶️ Play", callback_game: {} }],
+            [Markup.button.webApp("🚀 Enter The Game", gameLink)]
+        ]
+    }
+});
 });
 
 
