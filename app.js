@@ -221,21 +221,19 @@ bot.command('start', (ctx) => {
     );
 });
 
-bot.action("create_game", (ctx) => {
+bot.action("create_game", async (ctx) => {
     const roomId = makeRoomId();
     const gameLink = `${GAME_URL}/room/${roomId}`;
-    
-    ctx.replyWithPhoto(
-        "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg",
-        {
-            caption: `♟️ <b>Chess Game Created!</b>\n\nRoom ID: <code>${roomId}</code>\n\n1. Tap 'Enter Game' to set up options.\n2. Then forward this message to a friend!`,
-            parse_mode: "HTML",
-            ...Markup.inlineKeyboard([
-                [Markup.button.webApp("🚀 Enter The Game", gameLink)],
-                [Markup.button.url("📤 Share Game", `https://t.me/share/url?url=${gameLink}&text=Play Chess with me!`)]
-            ])
+
+    await ctx.replyWithGame("Optimal_Chess", {
+        reply_markup: {
+            inline_keyboard: [
+                [
+                  { text: "🚀 Enter The Game", url: gameLink }
+                ]
+            ]
         }
-    );
+    });
 });
 
 bot.launch();
