@@ -236,6 +236,14 @@ bot.action("create_game", async (ctx) => {
     });
 });
 
-bot.launch();
+bot.catch((err) => {
+  console.error("Telegram Bot Error:", err.description || err.message);
+});
+
+bot.launch().then(() => {
+  console.log("🤖 Telegram Bot Started");
+}).catch(err => {
+  console.error("❌ Failed to start bot:", err.message);
+});
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
