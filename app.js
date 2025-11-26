@@ -78,10 +78,10 @@ function stopRoomTimer(roomId) {
 // ROUTES
 // ==========================================
 app.get("/", (req, res) => res.render("index"));
-
-// Game WebApp Page (always the same page, room handled in JS)
-app.get("/room", (req, res) => {
-  res.render("room");
+app.get("/room/:id", (req, res) => {
+  const roomId = req.params.id.toUpperCase();
+  if (!rooms[roomId]) createRoom(roomId);
+  res.render("room", { roomId });
 });
 
 // ==========================================
@@ -221,42 +221,22 @@ bot.command('start', (ctx) => {
     );
 });
 
-bot.action("create_game", async (ctx) => {
-  await ctx.answerCbQuery();
-
-  const roomId = makeRoomId();
-
-  // Send the special GAME preview message
-  await ctx.replyWithGame("Optimal_Chess", {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: "▶️ Play",
-            callback_game: {}  // Needed ONLY to display "GAME"
-          }
-        ],
-        [
-          {
-            text: "🎮 Open Game",
-            web_app: { url: `${GAME_URL}/room` }
-          }
-        ]
-      ]
-    }
-  });
-
-  // Store room-id for this user securely
-  ctx.session = { roomId };
+bot.action("create_game", (ctx) => {
+    const roomId = makeRoomId();
+    const gameLink = `${GAME_URL}/room/${roomId}`;
+    
+    ctx.replyWithPhoto(
+        "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg",
+        {
+            caption: `♟️ <b>Chess Game Created!</b>\n\nRoom ID: <code>${roomId}</code>\n\n1. Tap 'Enter Game' to set up options.\n2. Then forward this message to a friend!`,
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+                [Markup.button.webApp("🚀 Enter The Game", gameLink)],
+                [Markup.button.url("📤 Share Game", `https://t.me/share/url?url=${gameLink}&text=Play Chess with me!`)]
+            ])
+        }
+    );
 });
-
-bot.on("callback_query", async (ctx) => {
-  if (ctx.callbackQuery.game_short_name === "Optimal_Chess") {
-    await ctx.answerGameQuery(`https://telegramchessbot.onrender.com/room`);
-  }
-});
-
-
 
 bot.launch();
 const PORT = process.env.PORT || 3000;

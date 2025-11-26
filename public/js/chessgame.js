@@ -1,18 +1,7 @@
 const socket = io();
 const chess = new Chess();
-
-// Telegram WebApp
-const tg = window.Telegram;
-
-// Read roomId from Telegram deep-link (if forwarded “Play” was clicked)
-const START_PARAM = tg.initDataUnsafe?.start_param || null;
-console.log("START_PARAM:", START_PARAM);
-
-socket.on("connect", () => {
-  if (START_PARAM) {
-    socket.emit("joinRoom", START_PARAM);
-  }
-});
+const tg = window.Telegram.WebApp;
+tg.expand();
 
 let boardEl = null;
 let role = null;
