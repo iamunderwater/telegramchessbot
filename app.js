@@ -16,8 +16,13 @@ app.use(express.static(path.join(__dirname, "public")));
 // ==========================================
 // CONFIGURATION
 // ==========================================
+// Replace with your actual Bot Token
 const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; 
+
+// Replace with your actual Render URL
 const GAME_URL = "https://telegramchessbot.onrender.com"; 
+
+// MUST match the Short Name in @BotFather
 const GAME_SHORT_NAME = "Optimal_Chess"; 
 
 // ==========================================
@@ -27,7 +32,6 @@ const rooms = Object.create(null);
 
 // Mappings to track rooms
 const inlineGameMappings = new Map(); // Key: inline_message_id, Value: roomId
-const userSessions = new Map(); // Key: userId, Value: roomId (for initial creation)
 
 const makeRoomId = () => crypto.randomBytes(4).toString("hex").slice(0, 6).toUpperCase();
 
@@ -46,7 +50,6 @@ function createRoom(roomId) {
   return room;
 }
 
-// ... (Keep startRoomTimer and stopRoomTimer functions exactly as before) ...
 function startRoomTimer(roomId) {
   const room = rooms[roomId];
   if (!room || room.isTimerRunning) return;
@@ -94,7 +97,6 @@ app.get("/room/:id", (req, res) => {
 // SOCKET.IO LOGIC
 // ==========================================
 io.on("connection", (socket) => {
-  // ... (Keep your existing Socket.IO logic exactly the same) ...
   // 1. CHECK STATUS
   socket.on("check_room_status", (roomId) => {
     roomId = roomId.toUpperCase();
@@ -212,16 +214,15 @@ io.on("connection", (socket) => {
 const bot = new Telegraf(BOT_TOKEN);
 
 // 1. START COMMAND
-// Just shows a button to switch to Inline Mode
 bot.command('start', (ctx) => {
     ctx.replyWithPhoto(
         "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", 
         {
-            caption: "<b>Welcome to Chess Master!</b>\n\nTo start a game, click the button below and select the game from the menu.",
+            caption: "<b>Welcome to Chess Master!</b>\n\nTo start a game, click the button below.",
             parse_mode: "HTML",
             ...Markup.inlineKeyboard([
-                // This switches the user to inline mode: "@YourBot "
-                [Markup.button.switchToInlineQuery("🎮 Create New Game", "")]
+                // FIX: Use 'switchToCurrentChat' to open inline mode in the current chat
+                [Markup.button.switchToCurrentChat("🎮 Create New Game", "")]
             ])
         }
     );
@@ -230,38 +231,36 @@ bot.command('start', (ctx) => {
 // 2. INLINE QUERY HANDLER
 // This generates the "Game Message" in the popup menu
 bot.on('inline_query', (ctx) => {
-    // Generate a potential Room ID
+    // Generate a new Room ID
     const roomId = makeRoomId();
 
     const results = [{
         type: 'game',
-        id: roomId, // We use the Room ID as the Result ID
+        id: roomId, // Use Room ID as the Result ID
         game_short_name: GAME_SHORT_NAME,
         reply_markup: Markup.inlineKeyboard([
              // The Play button (Standard Game Button)
             [Markup.button.game("♟️ Play Chess")],
-            // The Share button (switches context to share the game)
+            // The Share button (switches context to share the game to other chats)
             [Markup.button.switchToChat("📤 Share with Friends", "")] 
         ])
     }];
     
-    // We cache this calculation for 0 seconds so every time they type, they get a new ID if needed
-    // (Or we can rely on chosen_inline_result to set the final ID)
+    // Cache time 0 ensures we get a fresh ID every time we type @Bot
     return ctx.answerInlineQuery(results, { cache_time: 0 });
 });
 
 // 3. CHOSEN INLINE RESULT (The Magic Step)
-// This fires when the user actually taps the game to send it.
-// We capture the PERMANENT inline_message_id here.
+// This fires when the user actually sends the game.
 bot.on('chosen_inline_result', (ctx) => {
     const { inline_message_id, result_id } = ctx.update.chosen_inline_result;
     
     // result_id IS the roomId we generated in step 2
     if (result_id) {
-        // We create the room in memory
+        // Create the room in memory
         if(!rooms[result_id]) createRoom(result_id);
         
-        // We link this specific message (which can be forwarded!) to the room
+        // Link this specific message (which can be forwarded!) to the room
         inlineGameMappings.set(inline_message_id, result_id);
         console.log(`Game created! MsgID: ${inline_message_id} -> Room: ${result_id}`);
     }
@@ -273,10 +272,10 @@ bot.gameQuery((ctx) => {
     let roomId;
 
     if (inline_message_id && inlineGameMappings.has(inline_message_id)) {
-        // If this message (or its forward) is known, join that room
+        // If this message is known, join that room
         roomId = inlineGameMappings.get(inline_message_id);
     } else {
-        // Fallback: If for some reason we lost the mapping (server restart), create new
+        // Fallback: If map is lost (server restart), create new
         roomId = makeRoomId();
     }
 
