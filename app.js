@@ -14,20 +14,15 @@ app.set("view engine", "ejs");
 app.use(express.static(path.join(__dirname, "public")));
 
 // ==========================================
-// CONFIGURATION
+// CONFIGURATION (UPDATE THESE!)
 // ==========================================
 const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; 
 const GAME_URL = "https://telegramchessbot.onrender.com"; 
-const GAME_SHORT_NAME = "Optimal_Chess"; // Matches your BotFather setting
 
 // ==========================================
 // GAME STATE
 // ==========================================
 const rooms = Object.create(null);
-
-// Mappings: Inline Message ID -> Room ID
-// This is the "via @Bot" secret. Inline IDs are permanent, so they survive forwarding.
-const inlineGameMappings = new Map(); 
 
 const makeRoomId = () => crypto.randomBytes(4).toString("hex").slice(0, 6).toUpperCase();
 
@@ -37,10 +32,10 @@ function createRoom(roomId) {
     white: null,
     black: null,
     watchers: new Set(),
-    timers: { w: 600, b: 600 },
+    timers: { w: 600, b: 600 }, // Default 10 min
     timerInterval: null,
     isTimerRunning: false,
-    settings: null
+    settings: null // null = not set up yet
   };
   rooms[roomId] = room;
   return room;
@@ -93,18 +88,22 @@ app.get("/room/:id", (req, res) => {
 // SOCKET.IO LOGIC
 // ==========================================
 io.on("connection", (socket) => {
+  // 1. PRIVATE LOBBY CHECK
   socket.on("check_room_status", (roomId) => {
     roomId = roomId.toUpperCase();
     if (!rooms[roomId]) createRoom(roomId);
     const room = rooms[roomId];
     
+    // If settings are null, ask Creator to set them up
     if (!room.settings) {
         socket.emit("room_status", "empty"); 
     } else {
+        // If settings exist, tell Guest to join
         socket.emit("room_status", "waiting");
     }
   });
 
+  // 2. CREATOR SAVES SETTINGS
   socket.on("initialize_room", (data) => {
       const { roomId, settings } = data;
       const rId = roomId.toUpperCase();
@@ -115,6 +114,7 @@ io.on("connection", (socket) => {
       rooms[rId].timers = { w: t, b: t };
   });
 
+  // 3. JOIN ROOM
   socket.on("joinRoom", data => {
     let roomId, forcedRole;
     if (typeof data === "string") roomId = data.toUpperCase();
@@ -126,6 +126,7 @@ io.on("connection", (socket) => {
     socket.join(roomId);
     socket.data.currentRoom = roomId;
 
+    // Priority: Forced Role (Creator)
     if (forcedRole === "w") {
       room.white = socket.id;
       socket.emit("init", { role: "w", fen: room.chess.fen(), timers: room.timers });
@@ -134,6 +135,7 @@ io.on("connection", (socket) => {
       room.black = socket.id;
       socket.emit("init", { role: "b", fen: room.chess.fen(), timers: room.timers });
     }
+    // Auto-Assign (Guest)
     else {
       if (room.white && !room.black) {
         room.black = socket.id;
@@ -155,6 +157,7 @@ io.on("connection", (socket) => {
     }
   });
 
+  // 4. MOVE HANDLING
   socket.on("move", (data) => {
     try {
       const roomId = socket.data.currentRoom || data.roomId;
@@ -205,76 +208,34 @@ io.on("connection", (socket) => {
 // ==========================================
 const bot = new Telegraf(BOT_TOKEN);
 
-// 1. START COMMAND
-// Matches Video 00:00 - 00:04
 bot.command('start', (ctx) => {
     ctx.replyWithPhoto(
         "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", 
         {
-            caption: "<b>Welcome to Chess Master!</b>\n\nClick below to start.",
+            caption: "<b>Welcome to Chess Master!</b>\n\nClick below to start a game with friends.",
             parse_mode: "HTML",
             ...Markup.inlineKeyboard([
-                // THIS BUTTON AUTOMATICALLY OPENS THE INLINE MENU
-                // This mimics the "autotyping" you see in the video.
-                [Markup.button.switchToCurrentChat("🎮 Create New Game Here", "")]
+                [Markup.button.callback("🎮 Create New Game", "create_game")]
             ])
         }
     );
 });
 
-// 2. INLINE QUERY HANDLER
-// Matches Video 00:05: Shows the game card in the list
-bot.on('inline_query', (ctx) => {
-    const roomId = makeRoomId(); // Create a potential Room ID
-
-    const results = [{
-        type: 'game',
-        id: roomId, // Store Room ID in result ID
-        game_short_name: GAME_SHORT_NAME,
-        reply_markup: Markup.inlineKeyboard([
-            // Matches Screenshot: Button 1 "Enter The Game"
-            [Markup.button.game("Enter The Game")],
-            // Matches Screenshot: Button 2 "Call..."
-            [Markup.button.switchToChat("Call OptimalChessBot", "")] 
-        ])
-    }];
+bot.action("create_game", (ctx) => {
+    const roomId = makeRoomId();
+    const gameLink = `${GAME_URL}/room/${roomId}`;
     
-    // cache_time: 0 is important so every time you open the menu, it's a NEW game
-    return ctx.answerInlineQuery(results, { cache_time: 0, is_personal: true });
-});
-
-// 3. CHOSEN INLINE RESULT (THE KEY STEP)
-// Matches Video 00:06: Runs when you TAP the game in the list.
-// This is the moment the game is created and sent with the "via" tag.
-bot.on('chosen_inline_result', (ctx) => {
-    const { inline_message_id, result_id } = ctx.update.chosen_inline_result;
-    
-    // result_id is the roomId we generated in step 2
-    if (result_id) {
-        if(!rooms[result_id]) createRoom(result_id);
-        
-        // Link the "Forward-Proof" Message ID to the Room ID
-        inlineGameMappings.set(inline_message_id, result_id);
-        console.log(`✅ Game Created (Inline)! Room: ${result_id}`);
-    }
-});
-
-// 4. GAME LAUNCHER
-// Matches Video 00:26: Handles joining from the forwarded message
-bot.gameQuery((ctx) => {
-    const { inline_message_id } = ctx.callbackQuery;
-    let roomId;
-
-    // Because we used Inline Mode, this ID exists and persists across forwards
-    if (inline_message_id && inlineGameMappings.has(inline_message_id)) {
-        roomId = inlineGameMappings.get(inline_message_id);
-    } else {
-        // Fallback (e.g. server restarted)
-        roomId = makeRoomId();
-    }
-
-    const gameUrl = `${GAME_URL}/room/${roomId}`;
-    return ctx.answerGameQuery(gameUrl);
+    ctx.replyWithPhoto(
+        "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg",
+        {
+            caption: `♟️ <b>Chess Game Created!</b>\n\nRoom ID: <code>${roomId}</code>\n\n1. Tap 'Enter Game' to set up options.\n2. Then forward this message to a friend!`,
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+                [Markup.button.webApp("🚀 Enter The Game", gameLink)],
+                [Markup.button.url("📤 Share Game", `https://t.me/share/url?url=${gameLink}&text=Play Chess with me!`)]
+            ])
+        }
+    );
 });
 
 bot.launch();
