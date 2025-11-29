@@ -221,36 +221,23 @@ bot.command('start', (ctx) => {
     );
 });
 
-bot.action("create_game", async (ctx) => {
-  // create a room id
-  const roomId = makeRoomId();
-
-  // This should be the game short name you registered in BotFather for your web game.
-  // Example: "my_chess_game" — replace with your actual short name.
-  const GAME_SHORT_NAME = "Optimal_Chess";
-
-  // Useful caption shown above the Play button. We keep it minimal because
-  // the Play button is automatically attached to a game message.
-  const caption = `♟️ <b>Chess Game Created!</b>\n\nRoom ID: <code>${roomId}</code>\n\nTap "Play" to enter the game.`;
-  try {
-    await ctx.replyWithGame(GAME_SHORT_NAME, {
-      caption,
-      parse_mode: "HTML"
-      // no extra share / switch-inline buttons here
-      // the Play button is provided automatically by Telegram for game messages
-    });
-
-    // Optionally send the creator a direct Web App link (visible only to them)
-    // if you still want the creator to immediately open a web app preloaded with the room id:
-    // await ctx.reply("Open game (creator only):", Markup.inlineKeyboard([
-    //   Markup.button.webApp("Enter The Game", `${GAME_URL}/room/${roomId}`)
-    // ]));
-
-  } catch (err) {
-    console.error("Failed to send game message:", err);
-    ctx.reply("Sorry, something went wrong while creating the game.");
-  }
+bot.action("create_game", (ctx) => {
+    const roomId = makeRoomId();
+    const gameLink = `${GAME_URL}/room/${roomId}`;
+    
+    ctx.replyWithPhoto(
+        "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg",
+        {
+            caption: `♟️ <b>Chess Game Created!</b>\n\nRoom ID: <code>${roomId}</code>\n\n1. Tap 'Enter Game' to set up options.\n2. Then forward this message to a friend!`,
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+                [Markup.button.webApp("🚀 Enter The Game", gameLink)],
+                [Markup.button.url("📤 Share Game", `https://t.me/share/url?url=${gameLink}&text=Play Chess with me!`)]
+            ])
+        }
+    );
 });
+
 bot.launch();
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
