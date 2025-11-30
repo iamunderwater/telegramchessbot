@@ -18,7 +18,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // ==========================================
 const BOT_TOKEN = "8332605905:AAEPxxEvTpkiYO6LjV7o1-ASa5ufIqxtGGs"; 
 const GAME_URL = "https://telegramchessbot.onrender.com"; 
-const GAME_SHORT_NAME = "Optimal_Chess"; // Your Short Name
+const GAME_SHORT_NAME = "Optimal_Chess"; 
 
 // ==========================================
 // GAME STATE
@@ -197,29 +197,39 @@ io.on("connection", (socket) => {
 });
 
 // ==========================================
-// TELEGRAM BOT LOGIC (NATIVE GAME PLATFORM)
+// TELEGRAM BOT LOGIC
 // ==========================================
 const bot = new Telegraf(BOT_TOKEN);
 
-// 1. Handle /start - Send the native Game card
+// 1. /start: Show the "Create New Game" button first
 bot.command('start', (ctx) => {
+    ctx.replyWithPhoto(
+        "https://upload.wikimedia.org/wikipedia/commons/6/6f/ChessSet.jpg", 
+        {
+            caption: "<b>Welcome to Chess Master!</b>\n\nClick below to start a new game.",
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([
+                [Markup.button.callback("🎮 Create New Game", "create_game")]
+            ])
+        }
+    );
+});
+
+// 2. Action: When user clicks "Create New Game", send the GAME CARD
+bot.action("create_game", (ctx) => {
+    // This sends the "Play Optimal_Chess" button
     return ctx.replyWithGame(GAME_SHORT_NAME);
 });
 
-// 2. Handle "Play" Button Click
-// This function runs whenever someone clicks the "Play" button on the Game Card.
-// We generate a unique Room ID here and send them to the URL.
+// 3. Game Query: When user clicks "Play Optimal_Chess" on the card
 bot.gameQuery((ctx) => {
     const roomId = makeRoomId();
-    // Use the ctx.callbackQuery.id to answer
     const url = `${GAME_URL}/room/${roomId}`;
     return ctx.answerGameQuery(url);
 });
 
-// 3. Handle Inline Queries (Typing @YourBot in another chat)
+// 4. Inline Query: Allow sharing via @YourBotName
 bot.on('inline_query', async (ctx) => {
-    // We return a "Game" result. 
-    // This allows users to share the game card directly to any chat.
     await ctx.answerInlineQuery([
         {
             type: 'game',
