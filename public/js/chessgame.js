@@ -9,16 +9,35 @@ let dragged = null;
 let source = null;
 let selectedSource = null;
 
-// Sounds
+// ==========================================
+// 1. UPDATED SOUNDS
+// ==========================================
 const moveSound = new Audio("/sounds/move.mp3");
 const captureSound = new Audio("/sounds/capture.mp3");
+const checkSound = new Audio("/sounds/check.mp3");
+const castleSound = new Audio("/sounds/castle.mp3");
 const endSound = new Audio("/sounds/gameover.mp3");
+
+// Helper to determine and play the correct sound based on move flags
+function playMoveSound(result) {
+    if (chess.isCheckmate()) {
+        endSound.play();
+    } else if (chess.inCheck()) {
+        checkSound.play();
+    } else if (result.flags.includes("c") || result.flags.includes("e")) {
+        captureSound.play(); // 'c' is capture, 'e' is en passant
+    } else if (result.flags.includes("k") || result.flags.includes("q")) {
+        castleSound.play(); // 'k' is kingside castle, 'q' is queenside castle
+    } else {
+        moveSound.play();
+    }
+}
 
 const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
 const pieceImage = p => `/pieces/${p.color}${p.type.toUpperCase()}.svg`;
 
 // ==========================================
-// 1. LOBBY LOGIC
+// 2. LOBBY LOGIC
 // ==========================================
 socket.on("connect", () => {
     socket.emit('check_room_status', ROOM_ID);
@@ -29,11 +48,9 @@ socket.on('room_status', (status) => {
     const waiting = document.getElementById('waiting');
     
     if (status === 'empty') {
-        // Show Creator Setup
         modal.classList.remove('hidden');
         waiting.classList.add('hidden');
     } else {
-        // Auto-Join Guest
         modal.classList.add('hidden');
         waiting.classList.remove('hidden');
         socket.emit('joinRoom', ROOM_ID);
@@ -42,22 +59,17 @@ socket.on('room_status', (status) => {
 
 window.confirmSettings = function(color) {
     const time = document.getElementById('time-slider').value;
-    
-    // Lock settings
     socket.emit('initialize_room', {
         roomId: ROOM_ID,
         settings: { time: time * 60, color: color }
     });
-
-    // Join self
     socket.emit('joinRoom', { roomId: ROOM_ID, role: color });
-    
     document.getElementById('setup-modal').classList.add('hidden');
     document.getElementById('waiting').classList.remove('hidden');
 };
 
 // ==========================================
-// 2. GAME LOGIC
+// 3. UPDATED GAME LOGIC
 // ==========================================
 socket.on("init", data => {
   role = data.role;
@@ -75,20 +87,26 @@ socket.on("boardstate", fen => {
 });
 
 socket.on("move", mv => {
-  chess.move(mv);
-  renderBoard();
-  moveSound.play();
+  const result = chess.move(mv); // Capture result to check flags
+  if (result) {
+    renderBoard();
+    playMoveSound(result); // Play specialized sound
+  }
 });
 
 socket.on("timers", t => updateTimers(t));
 
 socket.on("gameover", msg => {
-    endSound.play();
+    // Checkmate sound is handled in playMoveSound, 
+    // this plays for other endings like draws or resignations.
+    if (!chess.isCheckmate()) {
+        endSound.play();
+    }
     tg.showPopup({ title: "Game Over", message: msg, buttons: [{type:"close"}] });
 });
 
 // ==========================================
-// 3. BOARD RENDERING
+// 4. BOARD RENDERING
 // ==========================================
 function renderBoard() {
   boardEl = document.querySelector(".chessboard");
@@ -104,8 +122,6 @@ function renderBoard() {
       div.dataset.row = r;
       div.dataset.col = c;
 
-      // Logic to determine visual position based on role
-      // If black, we reverse the indices so row 7 (rank 1) is at the top
       let visualRow = (role === "b") ? (7 - r) : r;
       let visualCol = (role === "b") ? (7 - c) : c;
 
@@ -117,7 +133,7 @@ function renderBoard() {
         p.classList.add("piece");
         const img = document.createElement("img");
         img.src = pieceImage(sq);
-        img.classList.add("piece-img"); // This remains upright now
+        img.classList.add("piece-img");
         p.appendChild(img);
         div.appendChild(p);
         
@@ -145,9 +161,6 @@ function renderBoard() {
       boardEl.appendChild(div);
     });
   });
-
-  // REMOVED: boardEl.classList.add("flipped"); 
-  // We don't rotate the container anymore, so pieces stay upright.
 }
 
 function handleTap(r, c) {
