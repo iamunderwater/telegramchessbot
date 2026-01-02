@@ -97,33 +97,30 @@ function renderBoard() {
 
   const board = chess.board();
   
-  // Outer loop for rows (r)
   board.forEach((row, r) => {
-    // Inner loop for columns (c)
     row.forEach((sq, c) => {
       const div = document.createElement("div");
       div.classList.add("square", (r + c) % 2 ? "dark" : "light");
       div.dataset.row = r;
       div.dataset.col = c;
 
-      // --- FIX IS HERE: Inside the loops ---
+      // Logic to determine visual position based on role
+      // If black, we reverse the indices so row 7 (rank 1) is at the top
       let visualRow = (role === "b") ? (7 - r) : r;
       let visualCol = (role === "b") ? (7 - c) : c;
 
       div.style.left = `${visualCol * 42.5}px`;
       div.style.top = `${visualRow * 42.5}px`;
-      // --------------------------------------
 
       if (sq) {
         const p = document.createElement("div");
         p.classList.add("piece");
         const img = document.createElement("img");
         img.src = pieceImage(sq);
-        img.classList.add("piece-img");
+        img.classList.add("piece-img"); // This remains upright now
         p.appendChild(img);
         div.appendChild(p);
         
-        // Drag Logic
         if (role === sq.color) {
             p.draggable = true;
             p.addEventListener("dragstart", (e) => {
@@ -132,7 +129,6 @@ function renderBoard() {
                 const blank = document.createElement('canvas');
                 e.dataTransfer.setDragImage(blank,0,0);
             });
-            // Touch Logic
              p.addEventListener("click", (e) => {
                 e.stopPropagation();
                 handleTap(r, c);
@@ -150,9 +146,8 @@ function renderBoard() {
     });
   });
 
-  // Add/Remove flipped class to rotate piece images via CSS
-  if (role === "b") boardEl.classList.add("flipped");
-  else boardEl.classList.remove("flipped");
+  // REMOVED: boardEl.classList.add("flipped"); 
+  // We don't rotate the container anymore, so pieces stay upright.
 }
 
 function handleTap(r, c) {
