@@ -95,21 +95,24 @@ function renderBoard() {
   if (!boardEl) return;
   boardEl.innerHTML = "";
 
-  let visualRow = (role === "b") ? (7 - r) : r;
-let visualCol = (role === "b") ? (7 - c) : c;
-
-div.style.left = `${visualCol * 42.5}px`;
-div.style.top = `${visualRow * 42.5}px`;
-  
   const board = chess.board();
+  
+  // Outer loop for rows (r)
   board.forEach((row, r) => {
+    // Inner loop for columns (c)
     row.forEach((sq, c) => {
       const div = document.createElement("div");
       div.classList.add("square", (r + c) % 2 ? "dark" : "light");
       div.dataset.row = r;
       div.dataset.col = c;
-      div.style.left = `${c * 42.5}px`;
-      div.style.top = `${r * 42.5}px`;
+
+      // --- FIX IS HERE: Inside the loops ---
+      let visualRow = (role === "b") ? (7 - r) : r;
+      let visualCol = (role === "b") ? (7 - c) : c;
+
+      div.style.left = `${visualCol * 42.5}px`;
+      div.style.top = `${visualRow * 42.5}px`;
+      // --------------------------------------
 
       if (sq) {
         const p = document.createElement("div");
@@ -126,7 +129,6 @@ div.style.top = `${visualRow * 42.5}px`;
             p.addEventListener("dragstart", (e) => {
                 dragged = p;
                 source = { r, c };
-                // Hide ghost
                 const blank = document.createElement('canvas');
                 e.dataTransfer.setDragImage(blank,0,0);
             });
@@ -148,6 +150,7 @@ div.style.top = `${visualRow * 42.5}px`;
     });
   });
 
+  // Add/Remove flipped class to rotate piece images via CSS
   if (role === "b") boardEl.classList.add("flipped");
   else boardEl.classList.remove("flipped");
 }
