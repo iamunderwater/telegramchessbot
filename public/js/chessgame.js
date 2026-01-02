@@ -10,7 +10,7 @@ let source = null;
 let selectedSource = null;
 
 // ==========================================
-// 1. UPDATED SOUNDS
+// 1. SOUNDS CONFIGURATION
 // ==========================================
 const moveSound = new Audio("/sounds/move.mp3");
 const captureSound = new Audio("/sounds/capture.mp3");
@@ -18,16 +18,25 @@ const checkSound = new Audio("/sounds/check.mp3");
 const castleSound = new Audio("/sounds/castle.mp3");
 const endSound = new Audio("/sounds/gameover.mp3");
 
-// Helper to determine and play the correct sound based on move flags
+// Helper to determine and play the correct sound
 function playMoveSound(result) {
-    if (chess.isCheckmate()) {
+    // Check for Checkmate or Draw
+    if (chess.game_over()) {
         endSound.play();
-    } else if (chess.inCheck()) {
+        return;
+    }
+    
+    // Check for Check (v0.10.3 uses in_check)
+    if (chess.in_check()) {
         checkSound.play();
-    } else if (result.flags.includes("c") || result.flags.includes("e")) {
-        captureSound.play(); // 'c' is capture, 'e' is en passant
-    } else if (result.flags.includes("k") || result.flags.includes("q")) {
-        castleSound.play(); // 'k' is kingside castle, 'q' is queenside castle
+        return;
+    }
+
+    // Check Move Flags (c = capture, e = en passant, k/q = castle)
+    if (result.flags.indexOf('c') !== -1 || result.flags.indexOf('e') !== -1) {
+        captureSound.play();
+    } else if (result.flags.indexOf('k') !== -1 || result.flags.indexOf('q') !== -1) {
+        castleSound.play();
     } else {
         moveSound.play();
     }
@@ -69,7 +78,7 @@ window.confirmSettings = function(color) {
 };
 
 // ==========================================
-// 3. UPDATED GAME LOGIC
+// 3. GAME LOGIC
 // ==========================================
 socket.on("init", data => {
   role = data.role;
@@ -87,19 +96,18 @@ socket.on("boardstate", fen => {
 });
 
 socket.on("move", mv => {
-  const result = chess.move(mv); // Capture result to check flags
+  const result = chess.move(mv); 
   if (result) {
     renderBoard();
-    playMoveSound(result); // Play specialized sound
+    playMoveSound(result); 
   }
 });
 
 socket.on("timers", t => updateTimers(t));
 
 socket.on("gameover", msg => {
-    // Checkmate sound is handled in playMoveSound, 
-    // this plays for other endings like draws or resignations.
-    if (!chess.isCheckmate()) {
+    // If it wasn't a checkmate (already played sound), play the end sound now
+    if (!chess.in_checkmate()) {
         endSound.play();
     }
     tg.showPopup({ title: "Game Over", message: msg, buttons: [{type:"close"}] });
